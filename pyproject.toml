@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+dependencies = [
+    "tabulate",
+    "requests",
+    "colorama",
+    "rich",
+    "prompt_toolkit",
+]
+name = "codin"
+version = "0.1.0"
+description = "A chat CLI tool"
+authors = [{ name = "Christophe Clienti" }]
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.8"
+
+[project.scripts]
+codin = "codin.cli:main"
+
+[tool.ruff]
+line-length = 120
+
+[tool.flake8]
+line-length = 120
+
+[tool.black]
+line-length = 120
+
+[tool.pycodestyle]
+max-line-length = 120
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-cov>=5.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+]
