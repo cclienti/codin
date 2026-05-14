@@ -147,6 +147,9 @@ def command_write_file(code: str) -> str:
         return cmd_error("user cancelled write_file")
 
     try:
+        dir_path = os.path.dirname(_expand_filename(filename))
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
         with open(_expand_filename(filename), file_mode) as f:
             f.write(file_content)
             f.write("\n")
