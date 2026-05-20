@@ -650,6 +650,7 @@ class CopilotAgentClient:
 
             full_response = ""
             spinner = StreamingSpinner()
+            usage: dict = {}
 
             for line in response.iter_lines():
                 if not line:
@@ -665,10 +666,32 @@ class CopilotAgentClient:
                         if content:
                             spinner.update()
                             full_response += content
+                        if "usage" in chunk and chunk["usage"]:
+                            usage = chunk["usage"]
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
 
             spinner.finish()
+
+            # Display token/cache stats if available.
+            if usage:
+                prompt_tokens = usage.get("prompt_tokens", 0)
+                completion_tokens = usage.get("completion_tokens", 0)
+                # OpenAI-style (what Copilot actually returns)
+                cached = usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                # Anthropic-style (fallback)
+                cache_read = usage.get("cache_read_input_tokens", 0)
+                cache_write = usage.get("cache_creation_input_tokens", 0)
+                parts = [f"in={prompt_tokens} out={completion_tokens}"]
+                if cached:
+                    pct = int(cached * 100 / prompt_tokens) if prompt_tokens else 0
+                    parts.append(f"cached={cached} ({pct}%)")
+                if cache_write:
+                    parts.append(f"cache_write={cache_write}")
+                if cache_read:
+                    parts.append(f"cache_read={cache_read}")
+                Output.debug("tokens: " + "  ".join(parts))
+
             return full_response
 
         except KeyboardInterrupt:

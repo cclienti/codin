@@ -26,6 +26,8 @@ from prompt_toolkit.styles import Style as PtStyle
 from .term_output import Style, Fore, Output
 from .copilot_client import CopilotAgentClient, RequestInterrupted
 from .commands import command_execute_shell, command_read_file, command_write_file, execute_user_command
+from .remote import RemoteManager
+from .remote_ops import remote_save, remote_list, remote_delete, remote_load
 
 
 SYSTEM_PROMPT = """# INTERACTIVE BASH ASSISTANT
@@ -232,6 +234,14 @@ class ChatCompleter(Completer):
         "token": "Show token expiration info",
         "status": "Show session status (tokens, messages, compaction budget)",
         "compact": "Force compaction of conversation history",
+        "remote-add": "Add a remote  (usage: remote-add <name> ssh <user> <host> <path>)",
+        "remote-remove": "Remove a remote  (usage: remote-remove <name>)",
+        "remote-default": "Set the default remote  (usage: remote-default <name>)",
+        "remote-list": "List configured remotes",
+        "remote-save": "Save current session to remote  (usage: remote-save [filename [remote-name]])",
+        "remote-ls": "List sessions on remote  (usage: remote-ls [remote-name])",
+        "remote-delete": "Delete a session on remote  (usage: remote-delete <filename> [remote-name])",
+        "remote-load": "Load a session from remote  (usage: remote-load <filename> [remote-name])",
         "help": "Show help message",
     }
 
@@ -371,6 +381,7 @@ def main():
     args = parser.parse_args()
 
     client = CopilotAgentClient(SYSTEM_PROMPT)
+    remote_manager = RemoteManager()
 
     if args.session:
         client.load_history(Path(args.session))
@@ -381,6 +392,13 @@ def main():
     Output.info("Enter on empty line or Escape+Enter to send. Enter inserts newline.")
     Output.info("Press CTRL-C to interrupt request, CTRL-D to exit")
     Output.separator()
+    remotes = remote_manager.list_remotes()
+    if remotes:
+        Output.info("Remotes:")
+        for _r in remotes:
+            marker = " (default)" if _r.name == remote_manager.default else ""
+            Output.info(f"  {_r.display_str()}{marker}")
+        Output.separator()
 
     session = create_prompt_session(client=client)
     prompt_text = FormattedText([("bold ansiblue", "\n▸ You: ")])
@@ -477,6 +495,107 @@ def main():
                     Output.warning("Usage: load-history <path>")
                 else:
                     client.load_history(Path(parts[1].strip()))
+                continue
+
+            if user_input.lower().startswith("remote-add"):
+                parts = user_input.split()
+                # remote-add <name> ssh <user> <host> <path>
+                if len(parts) != 6 or parts[2] != "ssh":
+                    Output.warning("Usage: remote-add <name> ssh <user> <host> <path>")
+                else:
+                    r = remote_manager.add(parts[1], parts[2], parts[4], parts[3], parts[5])
+                    Output.success(f"Remote added: {r.display_str()}")
+                continue
+
+            if user_input.lower() == "remote-list":
+                rlist = remote_manager.list_remotes()
+                if not rlist:
+                    Output.warning("No remotes configured. Use: remote-add <name> ssh <user> <host> <path>")
+                else:
+                    for _r in rlist:
+                        marker = " (default)" if _r.name == remote_manager.default else ""
+                        Output.info(f"  {_r.display_str()}{marker}")
+                continue
+
+            if user_input.lower().startswith("remote-remove"):
+                parts = user_input.split()
+                if len(parts) != 2:
+                    Output.warning("Usage: remote-remove <name>")
+                elif remote_manager.remove(parts[1]):
+                    Output.success(f"Remote '{parts[1]}' removed")
+                else:
+                    Output.error(f"Remote '{parts[1]}' not found")
+                continue
+
+            if user_input.lower().startswith("remote-default"):
+                parts = user_input.split()
+                if len(parts) != 2:
+                    Output.warning("Usage: remote-default <name>")
+                elif remote_manager.set_default(parts[1]):
+                    Output.success(f"Default remote set to '{parts[1]}'")
+                else:
+                    Output.error(f"Remote '{parts[1]}' not found")
+                continue
+
+            if user_input.lower().startswith("remote-save"):
+                parts = user_input.split()
+                custom_name = parts[1] if len(parts) > 1 else None
+                remote_name = parts[2] if len(parts) > 2 else None
+                rem = remote_manager.get(remote_name)
+                if rem is None:
+                    Output.error("No remote configured. Use: remote-add <name> ssh <user> <host> <path>")
+                else:
+                    fname = custom_name if custom_name else f"{client.session_uuid}.jsonl"
+                    if not fname.endswith(".jsonl"):
+                        fname += ".jsonl"
+                    local_path = client._DEFAULT_HISTORY_DIR / fname
+                    client.save_history(local_path)
+                    remote_save(rem, local_path)
+
+            if user_input.lower().startswith("remote-ls"):
+                parts = user_input.split()
+                remote_name = parts[1] if len(parts) > 1 else None
+                rem = remote_manager.get(remote_name)
+                if rem is None:
+                    Output.error("No remote configured. Use: remote-add <name> ssh <user> <host> <path>")
+                else:
+                    files = remote_list(rem)
+                    if not files:
+                        Output.warning(f"No sessions found on remote '{rem.name}'")
+                    else:
+                        Output.info(f"Sessions on remote '{rem.name}':")
+                        for f in files:
+                            Output.info(f"  {f}")
+                continue
+
+            if user_input.lower().startswith("remote-delete"):
+                parts = user_input.split()
+                if len(parts) < 2:
+                    Output.warning("Usage: remote-delete <filename> [remote-name]")
+                else:
+                    filename = parts[1]
+                    remote_name = parts[2] if len(parts) > 2 else None
+                    rem = remote_manager.get(remote_name)
+                    if rem is None:
+                        Output.error("No remote configured.")
+                    else:
+                        remote_delete(rem, filename)
+                continue
+
+            if user_input.lower().startswith("remote-load"):
+                parts = user_input.split()
+                if len(parts) < 2:
+                    Output.warning("Usage: remote-load <filename> [remote-name]")
+                else:
+                    filename = parts[1]
+                    remote_name = parts[2] if len(parts) > 2 else None
+                    rem = remote_manager.get(remote_name)
+                    if rem is None:
+                        Output.error("No remote configured.")
+                    else:
+                        local_dest = client._DEFAULT_HISTORY_DIR / filename
+                        if remote_load(rem, filename, local_dest):
+                            client.load_history(local_dest)
                 continue
 
             if user_input.startswith("!"):
