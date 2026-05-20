@@ -388,17 +388,15 @@ def main():
 
     Output.banner("Codin'Chat")
     Output.info(f"Model: {client.model_id}")
-    Output.info("Type 'help' to list available commands.")
-    Output.info("Enter on empty line or Escape+Enter to send. Enter inserts newline.")
-    Output.info("Press CTRL-C to interrupt request, CTRL-D to exit")
-    Output.separator()
     remotes = remote_manager.list_remotes()
     if remotes:
         Output.info("Remotes:")
         for _r in remotes:
             marker = " (default)" if _r.name == remote_manager.default else ""
             Output.info(f"  {_r.display_str()}{marker}")
-        Output.separator()
+    Output.info("Type 'help' to list available commands.")
+    Output.info("Enter on empty line or Escape+Enter to send. Enter inserts newline.")
+    Output.info("Press CTRL-C to interrupt request, CTRL-D to exit")
 
     session = create_prompt_session(client=client)
     prompt_text = FormattedText([("bold ansiblue", "\n▸ You: ")])
@@ -551,6 +549,7 @@ def main():
                     local_path = client._DEFAULT_HISTORY_DIR / fname
                     client.save_history(local_path)
                     remote_save(rem, local_path)
+                continue
 
             if user_input.lower().startswith("remote-ls"):
                 parts = user_input.split()
