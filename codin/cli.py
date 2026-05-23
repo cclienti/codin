@@ -24,7 +24,7 @@ from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.styles import Style as PtStyle
 
 from .term_output import Style, Fore, Output
-from .copilot_client import CopilotAgentClient, RequestInterrupted
+from .llm import CopilotClient, AnthropicClient, RequestInterrupted
 from .commands import command_execute_shell, command_read_file, command_write_file, execute_user_command
 from .remote import RemoteManager
 from .remote_ops import remote_save, remote_list, remote_delete, remote_load
@@ -378,9 +378,20 @@ def main():
         metavar="FILE",
         help="Resume a previous session from a .jsonl file",
     )
+    parser.add_argument(
+        "--provider",
+        "-p",
+        choices=["copilot", "anthropic"],
+        default="copilot",
+        help="LLM provider to use (default: copilot)",
+    )
     args = parser.parse_args()
 
-    client = CopilotAgentClient(SYSTEM_PROMPT)
+    if args.provider == "anthropic":
+        client = AnthropicClient(SYSTEM_PROMPT)
+    else:
+        client = CopilotClient(SYSTEM_PROMPT)
+    remote_manager = RemoteManager()
     remote_manager = RemoteManager()
 
     if args.session:
@@ -461,12 +472,25 @@ def main():
                 except ValueError:
                     Output.error("no ModelID given")
                 continue
+            if user_input.lower().startswith("set-anthropic-key"):
+                parts = user_input.split(" ", 1)
+                if len(parts) < 2 or not parts[1].strip():
+                    Output.warning("Usage: set-anthropic-key <api-key>")
+                elif isinstance(client, AnthropicClient):
+                    client.save_api_key(parts[1].strip())
+                else:
+                    Output.warning("Current provider is not Anthropic. Switch with --provider anthropic.")
+                continue
+
 
             if user_input.lower() == "token":
-                if client.copilot_token_expires_at:
-                    Output.token_info(client.copilot_token_expires_at)
+                if isinstance(client, CopilotClient):
+                    if client.copilot_token_expires_at:
+                        Output.token_info(client.copilot_token_expires_at)
+                    else:
+                        Output.warning("No token loaded yet")
                 else:
-                    Output.warning("No token loaded yet")
+                    Output.warning("'token' command is only available for the Copilot provider.")
                 continue
 
             if user_input.lower().startswith("system "):
