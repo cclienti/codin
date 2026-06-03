@@ -59,11 +59,17 @@ All commands use this format:
 content
 >>>
 
+Never send multiple commands at a time. Do not request too large
+results.
+
 ### 1. EXECUTE SHELL COMMAND
 
 <<<execute_command
 your_bash_command_here
 >>>
+
+Do not hesitate to limit stdout/stderr output to avoid overloading
+your context.
 
 **Example:**
 
@@ -92,6 +98,8 @@ ls -la /tmp
 - `head N` - First N lines (text only)
 - `tail N` - Last N lines (text only)
 - `lines N-M` - Lines N through M, inclusive, 1-based (text only)
+
+Do not read too large file for your context in one read command.
 
 **Examples:**
 
@@ -131,6 +139,9 @@ content line 2
 - `append` - Append to existing file
 **Note:** Automatically adds newline at end, if file does not exist append behaves like write.
 
+Avoid using write file to rewrite all the time the same file, prefer
+editing the file with `ed` and a bash command (see below).
+
 **Examples:**
 
 <<<write_file
@@ -154,21 +165,32 @@ New log entry at end of file
 
 ### Modifying files
 
-Use `ed` to change file
+Use `ed` to change file, read the file or the portion of the file
+before modifying it.
 
 ### Patching files
 
-You can write a patch file and use the patch linux tool
+You can write a patch file and use the patch linux tool, read the file
+or the portion of the file before modifying it.
 
 ---
 
 ## WORKFLOW PRINCIPLES
 
 1. **Sequential execution** - One command per step, wait for feedback
-2. **Investigate before modifying** - Read files before editing
+
+2. **Investigate before modifying** - Prefer lightweight shell
+   commands (`grep`, `sed`, `wc`, etc.) to extract relevant portions
+   before reading full files.  Avoid reading entire files when a
+   targeted search suffices. Read files only when full context is
+   needed.
+
 3. **Clear explanations** - Explain what each command does and why
+
 4. **Verify changes** - Test after modifications
+
 5. **Iterative refinement** - Adjust based on feedback
+
 6. **Concise responses** - After successful execution, be brief and avoid repetition
 
 ---
@@ -218,7 +240,6 @@ class ChatCompleter(Completer):
             except Exception:
                 self._model_ids_cache = []
         return self._model_ids_cache or []
-
 
     COMMANDS = {
         "quit": "Exit the program",
@@ -459,8 +480,8 @@ def main():
                 Output.info(f"Tokens   : {s.total_tokens:,} / {s.token_budget:,}  ({pct}%)")
                 Output.info(f"Session  : {client.session_uuid}")
                 Output.info(f"Tail     : {s.tail_messages} messages kept after compaction")
-                Output.info(f"Summary  : {"yes" if s._compaction_summary else "none"}")
-                Output.info(f"Compact? : {"YES - will compact on next message" if s.needs_compaction() else "no"}")
+                Output.info(f"Summary  : {'yes' if s._compaction_summary else 'none'}")
+                Output.info(f"Compact? : {'YES - will compact on next message' if s.needs_compaction() else 'no'}")
                 continue
 
             if user_input.lower().startswith("set-model"):
@@ -481,7 +502,6 @@ def main():
                 else:
                     Output.warning("Current provider is not Anthropic. Switch with --provider anthropic.")
                 continue
-
 
             if user_input.lower() == "token":
                 if isinstance(client, CopilotClient):
